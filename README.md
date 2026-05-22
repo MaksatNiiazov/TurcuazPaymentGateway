@@ -61,7 +61,7 @@ INTEGRATION_KEYS=1c:secret-for-1c,site:secret-for-site,pos:secret-for-pos
 X-Integration-Key: secret-for-1c
 ```
 
-Сервис распознает владельца ключа как внутреннюю метку `integration_name=1c`. Это не логин и не передается клиентом отдельно. Для совместимости также поддерживаются старые `SERVICE_API_KEYS` и `SERVICE_API_KEY`.
+Сервис распознает владельца ключа как внутреннюю метку `integration_name=1c`. Это не логин и не передается клиентом отдельно. Для одного ключа используйте тот же формат, например `INTEGRATION_KEYS=1c:secret-for-1c`.
 
 | Метод | URL | Назначение |
 | --- | --- | --- |
@@ -102,6 +102,12 @@ Webhook URL, который нужно передать ответственны
 
 ```text
 https://your-domain.example/api/v1/webhooks/mkassa
+```
+
+Если включен `WEBHOOK_SHARED_SECRET`, передайте URL с secret-параметром:
+
+```text
+https://your-domain.example/api/v1/webhooks/mkassa?secret=your-webhook-secret
 ```
 
 По документу MKassa callback поддерживается только на домене с действующим SSL-сертификатом и портом `443`.

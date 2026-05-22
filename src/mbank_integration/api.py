@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
@@ -32,12 +32,6 @@ integration_key_scheme = APIKeyHeader(
     scheme_name="X-Integration-Key",
     auto_error=False,
     description="Integration key issued by this microservice owner.",
-)
-legacy_service_key_scheme = APIKeyHeader(
-    name="X-Service-API-Key",
-    scheme_name="X-Service-API-Key (legacy)",
-    auto_error=False,
-    description="Legacy integration key header. Prefer X-Integration-Key.",
 )
 
 
@@ -92,7 +86,7 @@ def create_app(
 
     protected_router = APIRouter(
         prefix="/api/v1",
-        dependencies=[Depends(require_service_api_key)],
+        dependencies=[Depends(require_integration_key)],
     )
 
     @protected_router.post(
@@ -236,12 +230,10 @@ def create_app(
         request: Request,
         payload: WebhookPayload,
         secret: str | None = None,
-        x_mkassa_webhook_secret: str | None = Header(None, alias="X-MKassa-Webhook-Secret"),
-        x_webhook_secret: str | None = Header(None, alias="X-Webhook-Secret"),
     ) -> WebhookAck:
         verify_webhook_secret(
             settings_from_request(request),
-            candidates=[secret, x_mkassa_webhook_secret, x_webhook_secret],
+            candidate=secret,
         )
         result = storage(request).save_webhook(payload)
         return WebhookAck(transaction_id=result.transaction_id, duplicate=result.duplicate)
@@ -265,30 +257,28 @@ def storage(request: Request) -> SQLiteMKassaStore:
     return request.app.state.store
 
 
-async def require_service_api_key(
+async def require_integration_key(
     request: Request,
     x_integration_key: str | None = Depends(integration_key_scheme),
-    x_service_api_key: str | None = Depends(legacy_service_key_scheme),
 ) -> None:
-    key_pool = settings_from_request(request).service_key_pool
+    key_pool = settings_from_request(request).integration_key_pool
     if not key_pool:
         request.state.integration_name = "anonymous"
         return
-    provided_key = x_integration_key or x_service_api_key
-    if provided_key:
+    if x_integration_key:
         for integration_name, expected in key_pool.items():
-            if hmac.compare_digest(provided_key, expected):
+            if hmac.compare_digest(x_integration_key, expected):
                 request.state.integration_name = integration_name
                 return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid integration key")
 
 
-def verify_webhook_secret(settings: Settings, *, candidates: list[str | None]) -> None:
+def verify_webhook_secret(settings: Settings, *, candidate: str | None) -> None:
     configured = settings.webhook_shared_secret
     if configured is None or not configured.get_secret_value():
         return
     expected = configured.get_secret_value()
-    if any(candidate and hmac.compare_digest(candidate, expected) for candidate in candidates):
+    if candidate and hmac.compare_digest(candidate, expected):
         return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook secret")
 

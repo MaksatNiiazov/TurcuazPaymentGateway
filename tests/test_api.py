@@ -37,7 +37,7 @@ def make_settings(db_path: Path) -> Settings:
     )
 
 
-def test_service_api_key_protects_control_endpoints(tmp_path: Path) -> None:
+def test_integration_key_protects_control_endpoints(tmp_path: Path) -> None:
     app = create_app(
         settings=make_settings(tmp_path / "app.db"),
         client=FakeMKassaClient(),
@@ -80,24 +80,7 @@ def test_integration_key_pool_identifies_integration_name(tmp_path: Path) -> Non
     assert [event["integration_name"] for event in events.json()] == ["erp"]
 
 
-def test_legacy_service_api_key_header_is_still_supported(tmp_path: Path) -> None:
-    app = create_app(
-        settings=make_settings(tmp_path / "app.db"),
-        client=FakeMKassaClient(),
-        store=SQLiteMKassaStore(tmp_path / "app.db"),
-    )
-
-    with TestClient(app) as client:
-        response = client.get(
-            "/api/v1/integration",
-            headers={"X-Service-API-Key": "pos-secret"},
-        )
-
-    assert response.status_code == 200
-    assert response.json() == {"integration_name": "pos"}
-
-
-def test_webhook_is_idempotent_and_does_not_require_service_api_key(tmp_path: Path) -> None:
+def test_webhook_is_idempotent_and_does_not_require_integration_key(tmp_path: Path) -> None:
     db_path = tmp_path / "app.db"
     app = create_app(
         settings=make_settings(db_path),

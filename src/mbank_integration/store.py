@@ -77,6 +77,18 @@ class SQLiteMKassaStore:
                     ON api_access_events(created_at);
                 """
             )
+            self._migrate_api_access_events(connection)
+
+    @staticmethod
+    def _migrate_api_access_events(connection: sqlite3.Connection) -> None:
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(api_access_events)").fetchall()
+        }
+        if "client_id" in columns and "integration_name" not in columns:
+            connection.execute(
+                "ALTER TABLE api_access_events RENAME COLUMN client_id TO integration_name"
+            )
 
     def upsert_transaction_payload(self, payload: BaseModel | dict[str, Any]) -> None:
         data = self._model_to_dict(payload)
