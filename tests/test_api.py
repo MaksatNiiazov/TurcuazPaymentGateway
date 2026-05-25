@@ -88,6 +88,7 @@ def test_demo_page_renders(tmp_path: Path) -> None:
     assert "MBank MKassa Demo" in response.text
     assert "dynamicForm" in response.text
     assert "staticForm" in response.text
+    assert "previewQr" in response.text
 
 
 def test_dynamic_qr_form_builds_payload_from_fields(tmp_path: Path) -> None:
@@ -147,6 +148,25 @@ def test_static_qr_form_builds_payload_from_fields(tmp_path: Path) -> None:
         "source": "tiger",
         "payer_code": "12345678901234",
     }
+
+
+def test_qr_render_returns_png(tmp_path: Path) -> None:
+    app = create_app(
+        settings=make_settings(tmp_path / "app.db"),
+        client=FakeMKassaClient(),
+        store=SQLiteMKassaStore(tmp_path / "app.db"),
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/qr/render",
+            headers={"X-Integration-Key": "pos-secret"},
+            params={"data": "https://app.mbank.kg/qr/#test"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG")
 
 
 def test_integration_key_pool_identifies_integration_name(tmp_path: Path) -> None:

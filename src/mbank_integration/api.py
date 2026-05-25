@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import io
 import hmac
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import Annotated
 
+import qrcode
 from fastapi import APIRouter, Body, Depends, FastAPI, Form, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 
 from mbank_integration.client import AsyncMKassaClient, MKassaAPIError, MKassaTransportError
@@ -135,8 +137,17 @@ DEMO_HTML = """
   <hr>
 
   <section>
+    <h2>Предпросмотр QR</h2>
+    <p><label>Текст или ссылка<br><input id="previewQrData" value="https://example.com/mbank-demo" size="60"></label></p>
+    <button type="button" onclick="previewQr()">Сгенерировать QR</button>
+  </section>
+
+  <hr>
+
+  <section>
     <h2>Результат</h2>
     <p id="links"></p>
+    <p id="qrImage"></p>
     <pre id="output"></pre>
   </section>
 
@@ -144,6 +155,7 @@ DEMO_HTML = """
     const keyInput = document.getElementById("integrationKey");
     const output = document.getElementById("output");
     const links = document.getElementById("links");
+    const qrImage = document.getElementById("qrImage");
     const txInput = document.getElementById("transactionId");
 
     keyInput.value = localStorage.getItem("integrationKey") || "";
@@ -166,6 +178,7 @@ DEMO_HTML = """
     function show(data) {
       output.textContent = JSON.stringify(data, null, 2);
       links.innerHTML = "";
+      qrImage.innerHTML = "";
       const qrLink = data.payment_token || data.static_qr_link;
       if (data.id) {
         txInput.value = data.id;
@@ -177,7 +190,34 @@ DEMO_HTML = """
         link.rel = "noreferrer";
         link.textContent = "Открыть ссылку QR";
         links.appendChild(link);
+        renderQr(qrLink).catch(err => show({ error: String(err), original_response: data }));
       }
+    }
+
+    async function renderQr(qrLink) {
+      qrImage.innerHTML = "";
+      const response = await fetch(`/api/v1/qr/render?data=${encodeURIComponent(qrLink)}`, {
+        headers: headers()
+      });
+      if (!response.ok) {
+        throw new Error(`QR render failed: HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const image = document.createElement("img");
+      image.src = url;
+      image.alt = "QR code";
+      image.width = 260;
+      image.height = 260;
+      qrImage.appendChild(image);
+    }
+
+    async function previewQr() {
+      const value = document.getElementById("previewQrData").value.trim();
+      if (!value) return show({ error: "Укажите текст или ссылку для QR" });
+      output.textContent = JSON.stringify({ qr_payload: value }, null, 2);
+      links.innerHTML = "";
+      await renderQr(value);
     }
 
     async function submitForm(path, form) {
@@ -488,6 +528,37 @@ def create_app(
         response = await mkassa(request).create_dynamic_qr(payload)
         storage(request).upsert_transaction_payload(response)
         return response
+
+    @protected_router.get(
+        "/qr/render",
+        tags=["qr"],
+        summary="Render QR PNG",
+        description="Renders a PNG QR image from `payment_token` or `static_qr_link`.",
+        response_class=StreamingResponse,
+    )
+    async def render_qr(
+        data: Annotated[
+            str,
+            Query(
+                min_length=1,
+                max_length=4096,
+                description="QR payload, usually MKassa payment_token or static_qr_link.",
+            ),
+        ],
+    ) -> StreamingResponse:
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=4,
+        )
+        qr.add_data(data)
+        qr.make(fit=True)
+        image = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        buffer.seek(0)
+        return StreamingResponse(buffer, media_type="image/png")
 
     @protected_router.post(
         "/qr/static/form",
