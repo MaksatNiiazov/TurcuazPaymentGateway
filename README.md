@@ -92,8 +92,8 @@ curl -X POST http://localhost:8010/api/v1/qr/dynamic \
     "cashier": 1234,
     "is_long_living": true,
     "metadata": {
-      "order_id": "ORD-1001",
-      "source": "pos"
+      "invoice_number": "TIGER-FACTURE-1001",
+      "source": "tiger"
     }
   }'
 ```
