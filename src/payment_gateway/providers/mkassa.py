@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Mapping
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from mbank_integration.config import Settings
-from mbank_integration.models import (
+from payment_gateway.config import Settings
+from payment_gateway.models import (
     BranchListResponse,
     CancelResponse,
     DynamicQRCreate,
@@ -292,3 +293,30 @@ class AsyncMKassaClient:
         if normalized.lower().startswith("api-key "):
             return normalized
         return f"api-key {normalized}"
+
+
+@dataclass(frozen=True)
+class MKassaProvider:
+    client: AsyncMKassaClient
+    name: str = "mkassa"
+
+    async def create_dynamic_qr(self, payload: DynamicQRCreate) -> DynamicQRResponse:
+        return await self.client.create_dynamic_qr(payload)
+
+    async def create_static_qr(self, payload: StaticQRCreate) -> StaticQRResponse:
+        return await self.client.create_static_qr(payload)
+
+    async def get_transaction(self, transaction_id: str) -> Transaction:
+        return await self.client.get_transaction(transaction_id)
+
+    async def cancel_transaction(self, transaction_id: str) -> CancelResponse:
+        return await self.client.cancel_transaction(transaction_id)
+
+    async def list_transactions(self, **filters: object) -> TransactionListResponse:
+        return await self.client.list_transactions(**filters)
+
+    async def transaction_details(self, **filters: object) -> TransactionDetailListResponse:
+        return await self.client.transaction_details(**filters)
+
+    async def branches(self, **filters: object) -> BranchListResponse:
+        return await self.client.branches(**filters)

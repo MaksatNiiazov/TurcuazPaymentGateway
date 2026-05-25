@@ -11,9 +11,9 @@ from fastapi import APIRouter, Body, Depends, FastAPI, Form, HTTPException, Quer
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 
-from mbank_integration.client import AsyncMKassaClient, MKassaAPIError, MKassaTransportError
-from mbank_integration.config import Settings, get_settings
-from mbank_integration.models import (
+from payment_gateway.config import Settings, get_settings
+from payment_gateway.gateway import PaymentGateway
+from payment_gateway.models import (
     BranchListResponse,
     CancelResponse,
     DynamicQRCreate,
@@ -26,7 +26,14 @@ from mbank_integration.models import (
     WebhookAck,
     WebhookPayload,
 )
-from mbank_integration.store import SQLiteMKassaStore
+from payment_gateway.providers.mkassa import (
+    AsyncMKassaClient,
+    MKassaAPIError,
+    MKassaProvider,
+    MKassaTransportError,
+)
+from payment_gateway.service import PaymentService
+from payment_gateway.store import PaymentStore
 
 
 integration_key_scheme = APIKeyHeader(
@@ -71,7 +78,7 @@ DEMO_HTML = """
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>MBank MKassa Demo</title>
+  <title>Payment Gateway Demo</title>
   <style>
     body { background: white; color: black; font-family: sans-serif; }
     input { margin-top: 4px; }
@@ -79,7 +86,7 @@ DEMO_HTML = """
   </style>
 </head>
 <body>
-  <h1>MBank MKassa Demo</h1>
+  <h1>Payment Gateway Demo</h1>
   <p>Минимальная страница для ручной проверки QR-интеграции.</p>
   <p><a href="/docs">Swagger</a> | <a href="/health">Health</a></p>
 
@@ -138,7 +145,7 @@ DEMO_HTML = """
 
   <section>
     <h2>Предпросмотр QR</h2>
-    <p><label>Текст или ссылка<br><input id="previewQrData" value="https://example.com/mbank-demo" size="60"></label></p>
+    <p><label>Текст или ссылка<br><input id="previewQrData" value="https://example.com/payment-gateway-demo" size="60"></label></p>
     <button type="button" onclick="previewQr()">Сгенерировать QR</button>
   </section>
 
@@ -272,26 +279,39 @@ def create_app(
     *,
     settings: Settings | None = None,
     client: AsyncMKassaClient | None = None,
-    store: SQLiteMKassaStore | None = None,
+    store: PaymentStore | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         resolved_settings = settings or get_settings()
-        resolved_store = store or SQLiteMKassaStore(resolved_settings.database_path)
-        resolved_store.initialize()
+        resolved_store = store or PaymentStore(resolved_settings.database_url)
+        if resolved_settings.auto_create_schema:
+            resolved_store.initialize()
         resolved_client = client or AsyncMKassaClient.from_settings(resolved_settings)
+        resolved_gateway = PaymentGateway(
+            [MKassaProvider(resolved_client)],
+            default_provider=resolved_settings.default_payment_provider,
+        )
+        resolved_payment_service = PaymentService(
+            gateway=resolved_gateway,
+            store=resolved_store,
+        )
 
         app.state.settings = resolved_settings
         app.state.store = resolved_store
         app.state.mkassa_client = resolved_client
+        app.state.payment_gateway = resolved_gateway
+        app.state.payment_service = resolved_payment_service
         try:
             yield
         finally:
             if client is None:
                 await resolved_client.aclose()
+            if store is None:
+                resolved_store.close()
 
     app = FastAPI(
-        title="MBank MKassa Integration",
+        title="Turkuaz Payment Gateway",
         version="0.1.0",
         description=(
             "Standalone adapter for MKassa QR payments.\n\n"
@@ -407,9 +427,7 @@ def create_app(
             }
         ),
     ) -> DynamicQRResponse:
-        response = await mkassa(request).create_dynamic_qr(payload)
-        storage(request).upsert_transaction_payload(response)
-        return response
+        return await payments(request).create_dynamic_qr(payload)
 
     @protected_router.post(
         "/qr/static",
@@ -456,9 +474,7 @@ def create_app(
             }
         ),
     ) -> StaticQRResponse:
-        response = await mkassa(request).create_static_qr(payload)
-        storage(request).upsert_transaction_payload(response)
-        return response
+        return await payments(request).create_static_qr(payload)
 
     @protected_router.post(
         "/qr/dynamic/form",
@@ -525,9 +541,7 @@ def create_app(
                 metadata_value_1=metadata_value_1,
             ),
         )
-        response = await mkassa(request).create_dynamic_qr(payload)
-        storage(request).upsert_transaction_payload(response)
-        return response
+        return await payments(request).create_dynamic_qr(payload)
 
     @protected_router.get(
         "/qr/render",
@@ -622,9 +636,7 @@ def create_app(
                 metadata_value_1=metadata_value_1,
             ),
         )
-        response = await mkassa(request).create_static_qr(payload)
-        storage(request).upsert_transaction_payload(response)
-        return response
+        return await payments(request).create_static_qr(payload)
 
     @protected_router.get(
         "/transactions/{transaction_id}",
@@ -635,9 +647,7 @@ def create_app(
         response_description="Current MKassa transaction state.",
     )
     async def get_transaction(request: Request, transaction_id: str) -> Transaction:
-        response = await mkassa(request).get_transaction(transaction_id)
-        storage(request).upsert_transaction_payload(response)
-        return response
+        return await payments(request).get_transaction(transaction_id)
 
     @protected_router.put(
         "/transactions/{transaction_id}/cancel",
@@ -651,8 +661,7 @@ def create_app(
         response_description="MKassa cancel response.",
     )
     async def cancel_transaction(request: Request, transaction_id: str) -> CancelResponse:
-        response = await mkassa(request).cancel_transaction(transaction_id)
-        return response
+        return await payments(request).cancel_transaction(transaction_id)
 
     @protected_router.get(
         "/transactions",
@@ -687,7 +696,7 @@ def create_app(
         branch: Annotated[int | None, Query(gt=0, description="MKassa branch ID.")] = None,
         cashier: Annotated[int | None, Query(gt=0, description="MKassa cashier ID.")] = None,
     ) -> TransactionListResponse:
-        return await mkassa(request).list_transactions(
+        return await payments(request).list_transactions(
             page=page,
             status=status_filter,
             transaction_type=transaction_type,
@@ -711,7 +720,7 @@ def create_app(
         end_date: Annotated[date, Query(description="End date, YYYY-MM-DD.")],
         page: Annotated[int | None, Query(ge=1, description="MKassa page number.")] = None,
     ) -> TransactionDetailListResponse:
-        return await mkassa(request).transaction_details(
+        return await payments(request).transaction_details(
             start_date=start_date,
             end_date=end_date,
             page=page,
@@ -732,7 +741,7 @@ def create_app(
         request: Request,
         page: Annotated[int | None, Query(ge=1, description="MKassa page number.")] = None,
     ) -> BranchListResponse:
-        return await mkassa(request).branches(page=page)
+        return await payments(request).branches(page=page)
 
     @protected_router.get(
         "/integration",
@@ -801,7 +810,7 @@ def create_app(
             settings_from_request(request),
             candidate=secret,
         )
-        result = storage(request).save_webhook(payload)
+        result = payments(request).save_webhook(payload)
         return WebhookAck(transaction_id=result.transaction_id, duplicate=result.duplicate)
 
     app.include_router(protected_router)
@@ -815,11 +824,11 @@ def settings_from_request(request: Request) -> Settings:
     return request.app.state.settings
 
 
-def mkassa(request: Request) -> AsyncMKassaClient:
-    return request.app.state.mkassa_client
+def payments(request: Request) -> PaymentService:
+    return request.app.state.payment_service
 
 
-def storage(request: Request) -> SQLiteMKassaStore:
+def storage(request: Request) -> PaymentStore:
     return request.app.state.store
 
 

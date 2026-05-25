@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from mbank_integration.client import AsyncMKassaClient, MKassaAPIError
-from mbank_integration.models import DynamicQRCreate, StaticQRCreate
+from payment_gateway.providers.mkassa import AsyncMKassaClient, MKassaAPIError
+from payment_gateway.models import DynamicQRCreate, StaticQRCreate
 
 
 @pytest.mark.asyncio

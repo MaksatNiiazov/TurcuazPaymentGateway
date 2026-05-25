@@ -5,10 +5,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from mbank_integration.api import create_app
-from mbank_integration.config import Settings
-from mbank_integration.models import DynamicQRResponse, StaticQRResponse
-from mbank_integration.store import SQLiteMKassaStore
+from payment_gateway.api import create_app
+from payment_gateway.config import Settings
+from payment_gateway.models import DynamicQRResponse, StaticQRResponse
+from payment_gateway.store import SQLitePaymentStore
 
 
 class FakeMKassaClient:
@@ -58,7 +58,7 @@ def test_integration_key_protects_control_endpoints(tmp_path: Path) -> None:
     app = create_app(
         settings=make_settings(tmp_path / "app.db"),
         client=FakeMKassaClient(),
-        store=SQLiteMKassaStore(tmp_path / "app.db"),
+        store=SQLitePaymentStore(tmp_path / "app.db"),
     )
 
     with TestClient(app) as client:
@@ -78,14 +78,14 @@ def test_demo_page_renders(tmp_path: Path) -> None:
     app = create_app(
         settings=make_settings(tmp_path / "app.db"),
         client=FakeMKassaClient(),
-        store=SQLiteMKassaStore(tmp_path / "app.db"),
+        store=SQLitePaymentStore(tmp_path / "app.db"),
     )
 
     with TestClient(app) as client:
         response = client.get("/demo")
 
     assert response.status_code == 200
-    assert "MBank MKassa Demo" in response.text
+    assert "Payment Gateway Demo" in response.text
     assert "dynamicForm" in response.text
     assert "staticForm" in response.text
     assert "previewQr" in response.text
@@ -96,7 +96,7 @@ def test_dynamic_qr_form_builds_payload_from_fields(tmp_path: Path) -> None:
     app = create_app(
         settings=make_settings(tmp_path / "app.db"),
         client=fake_client,
-        store=SQLiteMKassaStore(tmp_path / "app.db"),
+        store=SQLitePaymentStore(tmp_path / "app.db"),
     )
 
     with TestClient(app) as client:
@@ -123,7 +123,7 @@ def test_static_qr_form_builds_payload_from_fields(tmp_path: Path) -> None:
     app = create_app(
         settings=make_settings(tmp_path / "app.db"),
         client=fake_client,
-        store=SQLiteMKassaStore(tmp_path / "app.db"),
+        store=SQLitePaymentStore(tmp_path / "app.db"),
     )
 
     with TestClient(app) as client:
@@ -154,7 +154,7 @@ def test_qr_render_returns_png(tmp_path: Path) -> None:
     app = create_app(
         settings=make_settings(tmp_path / "app.db"),
         client=FakeMKassaClient(),
-        store=SQLiteMKassaStore(tmp_path / "app.db"),
+        store=SQLitePaymentStore(tmp_path / "app.db"),
     )
 
     with TestClient(app) as client:
@@ -173,7 +173,7 @@ def test_integration_key_pool_identifies_integration_name(tmp_path: Path) -> Non
     app = create_app(
         settings=make_settings(tmp_path / "app.db"),
         client=FakeMKassaClient(),
-        store=SQLiteMKassaStore(tmp_path / "app.db"),
+        store=SQLitePaymentStore(tmp_path / "app.db"),
     )
 
     with TestClient(app) as client:
@@ -197,7 +197,7 @@ def test_webhook_is_idempotent_and_does_not_require_integration_key(tmp_path: Pa
     app = create_app(
         settings=make_settings(db_path),
         client=FakeMKassaClient(),
-        store=SQLiteMKassaStore(db_path),
+        store=SQLitePaymentStore(db_path),
     )
     payload = {
         "id": "MKSA-2",

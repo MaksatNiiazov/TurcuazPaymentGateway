@@ -16,11 +16,13 @@ class Settings(BaseSettings):
     )
 
     app_env: str = Field("development", alias="APP_ENV")
+    default_payment_provider: str = Field("mkassa", alias="DEFAULT_PAYMENT_PROVIDER")
     mkassa_base_url: str = Field("https://api.mkassa.kg", alias="MKASSA_BASE_URL")
     mkassa_api_key: SecretStr = Field(..., alias="MKASSA_API_KEY")
     integration_keys: SecretStr | None = Field(None, alias="INTEGRATION_KEYS")
     webhook_shared_secret: SecretStr | None = Field(None, alias="WEBHOOK_SHARED_SECRET")
-    database_url: str = Field("sqlite:///./data/mbank_integration.db", alias="DATABASE_URL")
+    database_url: str = Field("sqlite:///./data/payment_gateway.db", alias="DATABASE_URL")
+    auto_create_schema: bool = Field(True, alias="AUTO_CREATE_SCHEMA")
     request_timeout_connect: float = Field(5.0, alias="REQUEST_TIMEOUT_CONNECT", gt=0)
     request_timeout_read: float = Field(20.0, alias="REQUEST_TIMEOUT_READ", gt=0)
     request_timeout_write: float = Field(10.0, alias="REQUEST_TIMEOUT_WRITE", gt=0)
@@ -46,8 +48,11 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, value: str) -> str:
-        if not value.startswith("sqlite:///"):
-            raise ValueError("Only sqlite:/// DATABASE_URL is supported by this service")
+        supported_prefixes = ("sqlite:///", "postgresql+psycopg://")
+        if not value.startswith(supported_prefixes):
+            raise ValueError(
+                "DATABASE_URL must start with sqlite:/// or postgresql+psycopg://"
+            )
         return value
 
     @property

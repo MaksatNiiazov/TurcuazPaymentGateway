@@ -1,4 +1,4 @@
-from mbank_integration.main import app, run
+from payment_gateway.main import app, run
 
 __all__ = ["app", "run"]
 

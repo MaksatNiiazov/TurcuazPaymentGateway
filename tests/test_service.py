@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import pytest
+
+from payment_gateway.gateway import PaymentGateway
+from payment_gateway.models import (
+    BranchListResponse,
+    CancelResponse,
+    DynamicQRCreate,
+    DynamicQRResponse,
+    StaticQRCreate,
+    StaticQRResponse,
+    Transaction,
+    TransactionDetailListResponse,
+    TransactionListResponse,
+)
+from payment_gateway.service import PaymentService
+from payment_gateway.store import SQLitePaymentStore
+
+
+class FakeProvider:
+    name = "fake"
+
+    async def create_dynamic_qr(self, payload: DynamicQRCreate) -> DynamicQRResponse:
+        return DynamicQRResponse(
+            id="FAKE-1",
+            amount=payload.amount,
+            status="inited",
+            transaction_type="qr",
+            payment_token="https://example.com/pay",
+            metadata=payload.metadata,
+        )
+
+    async def create_static_qr(self, payload: StaticQRCreate) -> StaticQRResponse:
+        return StaticQRResponse(
+            id=1,
+            static_qr_link="https://example.com/static",
+            branch=payload.branch,
+            cashier=payload.cashier,
+            amount=payload.amount,
+            change_amount=payload.change_amount,
+            metadata=payload.metadata,
+        )
+
+    async def get_transaction(self, transaction_id: str) -> Transaction:
+        return Transaction(id=transaction_id, status="paid")
+
+    async def cancel_transaction(self, transaction_id: str) -> CancelResponse:
+        return CancelResponse(transaction_id=transaction_id, message="OK")
+
+    async def list_transactions(self, **_: object) -> TransactionListResponse:
+        return TransactionListResponse(count=0, results=[])
+
+    async def transaction_details(self, **_: object) -> TransactionDetailListResponse:
+        return TransactionDetailListResponse(count=0, results=[])
+
+    async def branches(self, **_: object) -> BranchListResponse:
+        return BranchListResponse(count=0, results=[])
+
+
+@pytest.mark.asyncio
+async def test_payment_service_persists_provider_transaction(tmp_path) -> None:
+    store = SQLitePaymentStore(tmp_path / "app.db")
+    store.initialize()
+    service = PaymentService(
+        gateway=PaymentGateway([FakeProvider()], default_provider="fake"),
+        store=store,
+    )
+
+    response = await service.create_dynamic_qr(
+        DynamicQRCreate(amount=100, metadata={"invoice_number": "TIGER-1"})
+    )
+    saved = store.get_transaction(response.id)
+
+    assert response.id == "FAKE-1"
+    assert saved is not None
+    assert saved["status"] == "inited"
+    assert saved["metadata"] == {"invoice_number": "TIGER-1"}

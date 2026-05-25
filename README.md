@@ -1,13 +1,15 @@
-# MBank MKassa Integration
+# Turkuaz Payment Gateway
 
-Отдельный микросервис для интеграции с MKassa QR API. Его можно запускать самостоятельно или подключать к любому другому сервису через REST.
+Отдельный payment gateway микросервис. Его можно запускать самостоятельно или подключать к 1С, сайту, POS, фронту и другим сервисам через REST. MKassa сейчас подключена как первый банковский провайдер.
 
 Что внутри:
 
 - Typed async client для MKassa API.
 - REST API для динамического QR, статического QR, статусов, списков транзакций, торговых точек и деталей.
 - Webhook endpoint для callback-уведомлений от MKassa.
-- SQLite-хранилище callback-событий и последнего состояния транзакций.
+- SQL-хранилище callback-событий, аудита и последнего состояния транзакций.
+- PostgreSQL для боевого запуска, SQLite только для локального режима и тестов.
+- Provider/gateway-слой: MKassa подключена как первый платежный провайдер, другие банки добавляются отдельными адаптерами.
 - Retry для временных ошибок `429/5xx`, явные таймауты, без автоматического следования redirect.
 - Валидация сумм и `metadata`: максимум 5 ключей, значение до 150 символов.
 
@@ -23,7 +25,7 @@ cp .env.example .env
 Заполните `MKASSA_API_KEY` в `.env`, затем:
 
 ```bash
-uvicorn mbank_integration.main:app --host 0.0.0.0 --port 8010 --reload
+uvicorn payment_gateway.main:app --host 0.0.0.0 --port 8010 --reload
 ```
 
 Swagger UI:
@@ -49,14 +51,35 @@ JSON endpoint'ы `/api/v1/qr/dynamic` и `/api/v1/qr/static` оставлены 
 curl http://localhost:8010/health
 ```
 
-## Docker
+## Docker / production-like запуск
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Сервис будет доступен на `http://localhost:8010`.
+Compose поднимает приложение и PostgreSQL. Сервис будет доступен на `http://localhost:8010`.
+
+Для локального запуска без Docker можно оставить SQLite:
+
+```env
+DATABASE_URL=sqlite:///./data/payment_gateway.db
+```
+
+Для боевого запуска используйте PostgreSQL:
+
+```env
+DATABASE_URL=postgresql+psycopg://payments:<password>@<host>:5432/payment_gateway
+```
+
+В строгом production-режиме можно запускать миграции явно:
+
+```bash
+AUTO_CREATE_SCHEMA=false DATABASE_URL=postgresql+psycopg://payments:<password>@<host>:5432/payment_gateway \
+  .venv/bin/python -m alembic upgrade head
+```
+
+Подробнее по архитектуре: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Основные endpoint'ы
 

@@ -1,9 +1,31 @@
 services:
-  mbank-integration:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: payment_gateway
+      POSTGRES_USER: payments
+      POSTGRES_PASSWORD: payments_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payments -d payment_gateway"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  payment-gateway:
     build: .
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://payments:payments_password@postgres:5432/payment_gateway
     ports:
       - "8010:8010"
-    volumes:
-      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
