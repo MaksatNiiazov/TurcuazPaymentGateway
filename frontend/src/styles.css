@@ -237,6 +237,12 @@ h1 {
   padding: 16px;
 }
 
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .form-panel label {
   display: grid;
   gap: 6px;
@@ -269,6 +275,12 @@ h1 {
 .error-copy {
   margin: 0;
   color: #9e261f;
+  font-size: 13px;
+}
+
+.hint-copy {
+  margin: 0;
+  color: #66736f;
   font-size: 13px;
 }
 

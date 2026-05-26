@@ -66,13 +66,20 @@ export function refreshTransaction(transactionId: string): Promise<TransactionRo
 
 export function createDemoDynamicQr(payload: {
   amount: number;
+  branch?: number;
+  cashier?: number;
   invoice_number?: string;
   source?: string;
+  payer_code?: string;
+  payer_full_name?: string;
+  metadata?: Record<string, string>;
   is_long_living?: boolean;
 }): Promise<DynamicQrResponse> {
-  const metadata: Record<string, string> = {};
+  const metadata: Record<string, string> = { ...(payload.metadata ?? {}) };
   if (payload.invoice_number) metadata.invoice_number = payload.invoice_number;
   if (payload.source) metadata.source = payload.source;
+  if (payload.payer_code) metadata.payer_code = payload.payer_code;
+  if (payload.payer_full_name) metadata.payer_full_name = payload.payer_full_name;
 
   return requestJson<DynamicQrResponse>("/api/v1/admin/qr/dynamic", {
     method: "POST",
@@ -81,6 +88,8 @@ export function createDemoDynamicQr(payload: {
     },
     body: JSON.stringify({
       amount: payload.amount,
+      branch: payload.branch,
+      cashier: payload.cashier,
       is_long_living: payload.is_long_living,
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     }),

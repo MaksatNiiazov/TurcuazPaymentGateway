@@ -523,15 +523,34 @@ function QrDemoPanel({
   state: LoadState;
   onCreate: (payload: {
     amount: number;
+    branch?: number;
+    cashier?: number;
     invoice_number?: string;
     source?: string;
+    payer_code?: string;
+    payer_full_name?: string;
+    metadata?: Record<string, string>;
     is_long_living?: boolean;
   }) => void;
 }) {
   const [amount, setAmount] = useState(100);
+  const [branch, setBranch] = useState("");
+  const [cashier, setCashier] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("TIGER-FACTURE-1001");
   const [source, setSource] = useState("tiger");
+  const [payerCode, setPayerCode] = useState("");
+  const [payerFullName, setPayerFullName] = useState("");
+  const [metadataKey1, setMetadataKey1] = useState("");
+  const [metadataValue1, setMetadataValue1] = useState("");
   const [longLiving, setLongLiving] = useState(false);
+
+  const metadataCount = [
+    invoiceNumber.trim(),
+    source.trim(),
+    payerCode.trim(),
+    payerFullName.trim(),
+    metadataKey1.trim() && metadataValue1.trim(),
+  ].filter(Boolean).length;
 
   return (
     <section className="qr-demo-grid">
@@ -539,10 +558,19 @@ function QrDemoPanel({
         className="form-panel"
         onSubmit={(event) => {
           event.preventDefault();
+          const extraMetadata: Record<string, string> = {};
+          if (metadataKey1.trim() && metadataValue1.trim()) {
+            extraMetadata[metadataKey1.trim()] = metadataValue1.trim();
+          }
           onCreate({
             amount,
+            branch: branch.trim() ? Number(branch) : undefined,
+            cashier: cashier.trim() ? Number(cashier) : undefined,
             invoice_number: invoiceNumber.trim() || undefined,
             source: source.trim() || undefined,
+            payer_code: payerCode.trim() || undefined,
+            payer_full_name: payerFullName.trim() || undefined,
+            metadata: Object.keys(extraMetadata).length > 0 ? extraMetadata : undefined,
             is_long_living: longLiving || undefined,
           });
         }}
@@ -556,6 +584,26 @@ function QrDemoPanel({
             onChange={(event) => setAmount(Number(event.target.value) || 1)}
           />
         </label>
+        <div className="form-row">
+          <label>
+            Branch
+            <input
+              inputMode="numeric"
+              placeholder="если нужно"
+              value={branch}
+              onChange={(event) => setBranch(event.target.value)}
+            />
+          </label>
+          <label>
+            Cashier
+            <input
+              inputMode="numeric"
+              placeholder="если нужно"
+              value={cashier}
+              onChange={(event) => setCashier(event.target.value)}
+            />
+          </label>
+        </div>
         <label>
           Код фактуры Tiger
           <input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} />
@@ -564,6 +612,27 @@ function QrDemoPanel({
           Источник
           <input value={source} onChange={(event) => setSource(event.target.value)} />
         </label>
+        <label>
+          ИНН / код плательщика
+          <input value={payerCode} onChange={(event) => setPayerCode(event.target.value)} />
+        </label>
+        <label>
+          Наименование плательщика
+          <input value={payerFullName} onChange={(event) => setPayerFullName(event.target.value)} />
+        </label>
+        <div className="form-row">
+          <label>
+            Metadata key
+            <input value={metadataKey1} onChange={(event) => setMetadataKey1(event.target.value)} />
+          </label>
+          <label>
+            Metadata value
+            <input value={metadataValue1} onChange={(event) => setMetadataValue1(event.target.value)} />
+          </label>
+        </div>
+        <p className={metadataCount > 5 ? "error-copy" : "hint-copy"}>
+          Metadata: {metadataCount}/5
+        </p>
         <label className="check-row">
           <input
             checked={longLiving}

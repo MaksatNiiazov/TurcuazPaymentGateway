@@ -327,9 +327,14 @@ def test_admin_qr_demo_creates_dynamic_qr_and_renders_png(tmp_path: Path) -> Non
             headers={"X-Admin-Key": "admin-secret"},
             json={
                 "amount": 100,
+                "branch": 236366,
+                "cashier": 130610,
                 "metadata": {
                     "invoice_number": "TIGER-FACTURE-1001",
                     "source": "tiger",
+                    "payer_code": "12345678901234",
+                    "payer_full_name": "ОсОО Тест",
+                    "tiger_facture_id": "TF-1001",
                 },
             },
         )
@@ -342,6 +347,15 @@ def test_admin_qr_demo_creates_dynamic_qr_and_renders_png(tmp_path: Path) -> Non
     assert create.status_code == 200
     assert create.json()["payment_token"] == "https://app.mbank.kg/qr#abc"
     assert fake_client.last_dynamic_payload.amount == 100
+    assert fake_client.last_dynamic_payload.branch == 236366
+    assert fake_client.last_dynamic_payload.cashier == 130610
+    assert fake_client.last_dynamic_payload.metadata == {
+        "invoice_number": "TIGER-FACTURE-1001",
+        "source": "tiger",
+        "payer_code": "12345678901234",
+        "payer_full_name": "ОсОО Тест",
+        "tiger_facture_id": "TF-1001",
+    }
     assert render.status_code == 200
     assert render.headers["content-type"] == "image/png"
     assert render.content.startswith(b"\x89PNG")
