@@ -1,15 +1,4 @@
-import {
-  Activity,
-  Banknote,
-  Ban,
-  DatabaseZap,
-  FileJson,
-  QrCode,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  Webhook,
-} from "lucide-react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   cancelTransaction,
@@ -21,6 +10,109 @@ import {
   refreshTransaction,
 } from "./api";
 import type { AccessEvent, DynamicQrResponse, TransactionRow, ViewMode, WebhookEvent } from "./types";
+
+type IconName =
+  | "activity"
+  | "banknote"
+  | "ban"
+  | "database"
+  | "file"
+  | "qr"
+  | "refresh"
+  | "search"
+  | "shield"
+  | "webhook"
+  | "building"
+  | "users";
+
+function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 2,
+  };
+  const paths: Record<IconName, ReactNode> = {
+    activity: <path d="M4 12h4l2-6 4 12 2-6h4" />,
+    banknote: (
+      <>
+        <rect x="3" y="6" width="18" height="12" rx="2" />
+        <circle cx="12" cy="12" r="2.5" />
+        <path d="M6 9h1M17 15h1" />
+      </>
+    ),
+    ban: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M6.5 6.5 17.5 17.5" />
+      </>
+    ),
+    database: (
+      <>
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+        <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+      </>
+    ),
+    file: (
+      <>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+        <path d="M14 2v6h6" />
+        <path d="M8 13h8M8 17h6" />
+      </>
+    ),
+    qr: (
+      <>
+        <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" />
+        <path d="M14 14h2v2h-2zM18 14h2v6h-4v-2M14 18h2v2h-2z" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 12a8 8 0 0 1-13.7 5.7" />
+        <path d="M4 12A8 8 0 0 1 17.7 6.3" />
+        <path d="M7 18H4v-3" />
+        <path d="M17 6h3v3" />
+      </>
+    ),
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="M20 20l-3.5-3.5" />
+      </>
+    ),
+    shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />,
+    webhook: (
+      <>
+        <path d="M18 16.5a3.5 3.5 0 1 1-2.9 5.5" />
+        <path d="M6 16.5a3.5 3.5 0 1 0 2.9 5.5" />
+        <path d="M12 3a3.5 3.5 0 1 1-3.3 4.7" />
+        <path d="M8.5 16.5 11 12M15.5 16.5 13 12M12 8v4" />
+      </>
+    ),
+    building: (
+      <>
+        <path d="M5 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+        <path d="M3 21h18" />
+        <path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+        <circle cx="9.5" cy="7" r="4" />
+        <path d="M17 11a3 3 0 0 0 0-6" />
+        <path d="M21 21v-2a4 4 0 0 0-3-3.8" />
+      </>
+    ),
+  };
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...common}>
+      {paths[name]}
+    </svg>
+  );
+}
 
 type LoadState = {
   loading: boolean;
@@ -77,6 +169,17 @@ function canCancelTransaction(transaction: TransactionRow | null): boolean {
   );
 }
 
+function openService(value: string): void {
+  const urls: Record<string, string> = {
+    platform: "http://localhost:5174",
+    converter: "http://localhost:5173",
+    payments: "http://localhost:6750",
+    identity: "http://localhost:5177",
+  };
+  const url = urls[value];
+  if (url && value !== "payments") window.location.href = url;
+}
+
 function App() {
   const [view, setView] = useState<ViewMode>("transactions");
   const [limit, setLimit] = useState(50);
@@ -103,10 +206,10 @@ function App() {
       ["inited", "waiting", "qr_scanned"].includes(item.status || ""),
     ).length;
     return [
-      { label: "Транзакции", value: transactions.length, icon: Banknote },
-      { label: "Paid", value: paid, icon: ShieldCheck },
-      { label: "В ожидании", value: waiting, icon: Activity },
-      { label: "Webhook", value: webhooks.length, icon: Webhook },
+      { label: "Транзакции", value: transactions.length, icon: "banknote" as const },
+      { label: "Paid", value: paid, icon: "shield" as const },
+      { label: "В ожидании", value: waiting, icon: "activity" as const },
+      { label: "Webhook", value: webhooks.length, icon: "webhook" as const },
     ];
   }, [transactions, webhooks]);
 
@@ -193,30 +296,36 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">T</div>
-          <div>
-            <strong>Turkuaz</strong>
-            <span>Payment Gateway</span>
-          </div>
-        </div>
+        <a className="brand" href="http://localhost:5174">
+          <span className="brand-mark">T</span>
+          <span>
+            <strong>Turkuaz Payments</strong>
+            <small>Payment Gateway</small>
+          </span>
+        </a>
         <nav className="nav-list" aria-label="Admin navigation">
-          <NavButton active={view === "transactions"} icon={Banknote} onClick={() => setView("transactions")}>
+          <NavButton active={view === "transactions"} icon="banknote" onClick={() => setView("transactions")}>
             Транзакции
           </NavButton>
-          <NavButton active={view === "webhooks"} icon={Webhook} onClick={() => setView("webhooks")}>
+          <NavButton active={view === "webhooks"} icon="webhook" onClick={() => setView("webhooks")}>
             Webhooks
           </NavButton>
-          <NavButton active={view === "access"} icon={DatabaseZap} onClick={() => setView("access")}>
+          <NavButton active={view === "access"} icon="database" onClick={() => setView("access")}>
             Доступы
           </NavButton>
-          <NavButton active={view === "qr-demo"} icon={QrCode} onClick={() => setView("qr-demo")}>
+          <NavButton active={view === "qr-demo"} icon="qr" onClick={() => setView("qr-demo")}>
             QR Demo
           </NavButton>
         </nav>
         <div className="side-links">
+          <a href="http://localhost:5174">
+            <Icon name="building" size={16} /> Platform
+          </a>
+          <a href="http://localhost:5177">
+            <Icon name="users" size={16} /> Users
+          </a>
           <a href="/docs">
-            <FileJson size={16} /> Swagger
+            <Icon name="file" size={16} /> Swagger
           </a>
         </div>
       </aside>
@@ -239,6 +348,24 @@ function App() {
                 : "Операционная панель для просмотра платежей, callback’ов и обращений интеграций."}
             </p>
           </div>
+          <div className="topbar-actions">
+            <select aria-label="Филиал" className="branch-select" defaultValue="all">
+              <option value="all">Все филиалы</option>
+              <option value="head_office">Head Office</option>
+              <option value="bishkek">Бишкек</option>
+            </select>
+            <select
+              aria-label="Сервис"
+              className="branch-select service-select"
+              defaultValue="payments"
+              onChange={(event) => openService(event.target.value)}
+            >
+              <option value="platform">Platform</option>
+              <option value="converter">Converter</option>
+              <option value="payments">Payments</option>
+              <option value="identity">Identity</option>
+            </select>
+          </div>
         </header>
 
         {view === "qr-demo" ? (
@@ -252,7 +379,7 @@ function App() {
             <section className="metrics-grid">
               {metrics.map((metric) => (
                 <div className="metric" key={metric.label}>
-                  <metric.icon size={18} />
+                  <Icon name={metric.icon} size={20} />
                   <span>{metric.label}</span>
                   <strong>{metric.value}</strong>
                 </div>
@@ -291,7 +418,7 @@ function App() {
                 </>
               )}
               <button className="refresh" type="button" onClick={() => void loadData()}>
-                <RefreshCw size={16} />
+                <Icon name="refresh" size={16} />
                 Обновить
               </button>
               <div className="toolbar-state">
@@ -330,18 +457,18 @@ function App() {
 
 function NavButton({
   active,
-  icon: Icon,
+  icon,
   children,
   onClick,
 }: {
   active: boolean;
-  icon: typeof Banknote;
+  icon: IconName;
   children: string;
   onClick: () => void;
 }) {
   return (
     <button className={active ? "nav-button active" : "nav-button"} type="button" onClick={onClick}>
-      <Icon size={18} />
+      <Icon name={icon} size={18} />
       {children}
     </button>
   );
@@ -465,7 +592,7 @@ function TransactionDetails({
   return (
     <aside className="details-panel">
       <div className="details-title">
-        <Search size={18} />
+        <Icon name="search" size={18} />
         <h2>Детали</h2>
       </div>
       {!transaction ? (
@@ -490,7 +617,7 @@ function TransactionDetails({
             disabled={refreshingId === transaction.id}
             onClick={() => onRefreshStatus(transaction)}
           >
-            <RefreshCw size={15} />
+            <Icon name="refresh" size={15} />
             {refreshingId === transaction.id ? "Статус обновляется..." : "Обновить статус"}
           </button>
           {canCancelTransaction(transaction) && (
@@ -500,7 +627,7 @@ function TransactionDetails({
               disabled={cancelingId === transaction.id}
               onClick={() => onCancel(transaction)}
             >
-              <Ban size={15} />
+              <Icon name="ban" size={15} />
               {cancelingId === transaction.id ? "Операция отменяется..." : "Отменить операцию"}
             </button>
           )}
@@ -642,7 +769,7 @@ function QrDemoPanel({
           Long living QR
         </label>
         <button className="refresh" disabled={state.loading} type="submit">
-          <QrCode size={16} />
+          <Icon name="qr" size={16} />
           {state.loading ? "Создание..." : "Создать QR"}
         </button>
         {state.error && <p className="error-copy">{state.error}</p>}
@@ -650,7 +777,7 @@ function QrDemoPanel({
 
       <aside className="details-panel qr-result-panel">
         <div className="details-title">
-          <QrCode size={18} />
+          <Icon name="qr" size={18} />
           <h2>Результат</h2>
         </div>
         {!result ? (
@@ -687,7 +814,7 @@ function QrDemoPanel({
 function EmptyState() {
   return (
     <div className="empty-state">
-      <DatabaseZap size={34} />
+      <Icon name="database" size={34} />
       <h2>Пока нет данных</h2>
       <p>Создайте QR или дождитесь callback, после этого записи появятся здесь.</p>
     </div>
