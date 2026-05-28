@@ -30,7 +30,8 @@ services:
 
   payment-admin:
     build:
-      context: ./frontend
+      context: ..
+      dockerfile: PaymentGateway/frontend/Dockerfile
     environment:
       VITE_API_PROXY_TARGET: http://payment-gateway:8010
       PAYMENT_ADMIN_API_KEY: ${PAYMENT_ADMIN_API_KEY:-admin-dev-key}

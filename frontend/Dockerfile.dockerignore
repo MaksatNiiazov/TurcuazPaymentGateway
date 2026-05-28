@@ -1,0 +1,4 @@
+**
+!PaymentGateway/frontend/**
+!turkuaz-ui/package.json
+!turkuaz-ui/src/**
